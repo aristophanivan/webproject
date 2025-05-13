@@ -27,8 +27,8 @@ logger = logging.getLogger(__name__)
 
 # Bot token - replace with your actual token
 TOKEN = "7572401863:AAG712LzP9Ufb6Ygr7bgcjkWyV91TffUkrA"
-GITHUB_TOKEN = "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"  # Needed for creating forks
-GITHUB_USERNAME = "aristophanivan"  # Replace with your GitHub username
+GITHUB_TOKEN = "YOUR_TOKEN"  # Needed for creating forks 
+GITHUB_USERNAME = "YOUR_GITHUB_USERNAME"  # Replace with your GitHub username
 
 class TranslationBot:
     def __init__(self):
