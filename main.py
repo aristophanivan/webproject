@@ -17,6 +17,7 @@ from telegram.ext import (
 import fluent.syntax.ast as ast
 from fluent.syntax import FluentParser, FluentSerializer
 from deep_translator import GoogleTranslator
+import requests
 
 # Configure logging
 logging.basicConfig(
@@ -26,7 +27,8 @@ logger = logging.getLogger(__name__)
 
 # Bot token - replace with your actual token
 TOKEN = "7572401863:AAG712LzP9Ufb6Ygr7bgcjkWyV91TffUkrA"
-GITHUB_TOKEN = "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"  # Needed for creating forks
+GITHUB_TOKEN = "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"  # Needed for creating forks
+GITHUB_USERNAME = "aristophanivan"  # Replace with your GitHub username
 
 class TranslationBot:
     def __init__(self):
@@ -41,7 +43,7 @@ class TranslationBot:
     async def start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         user = update.effective_user
         await update.message.reply_text(
-            f"Hi {user.first_name}! Send me a link to a public GitHub repository with .ftl files to translate."
+            f"Привет, {user.first_name}! Пришли мне ссылку на публичный репозиторий GitHub с .ftl-файлами для перевода."
         )
 
     def get_project_number(self) -> int:
@@ -57,12 +59,12 @@ class TranslationBot:
         self.repo_url = update.message.text.strip()
 
         if not self.repo_url.startswith(('https://github.com/', 'git@github.com:')):
-            await update.message.reply_text("Please provide a valid GitHub repository URL.")
+            await update.message.reply_text("Пожалуйста, укажи корректную ссылку на репозиторий GitHub.")
             return
 
         try:
             self.base_dir = Path(__file__).parent
-            await update.message.reply_text("Cloning repository...")
+            await update.message.reply_text("Клонирую репозиторий...")
             self.repo = Repo.clone_from(self.repo_url, os.path.join(self.base_dir, f'project_{self.counter}'))
             self.counter += 1
             self.repo_dir = self.repo.working_dir
@@ -72,12 +74,12 @@ class TranslationBot:
             temp_api_dir = self.base_dir / "temp_api"
 
             if not os.path.exists(tools_dir):
-                await update.message.reply_text("Error: 'Tools' directory not found in repository.")
+                await update.message.reply_text("Ошибка: папка 'Tools' не найдена в репозитории.")
                 self.cleanup()
                 return
 
             if not os.path.exists(temp_api_dir):
-                await update.message.reply_text("Error: 'temp_api' directory not found near the script.")
+                await update.message.reply_text("Ошибка: папка 'temp_api' не найдена рядом со скриптом.")
                 self.cleanup()
                 return
 
@@ -85,14 +87,14 @@ class TranslationBot:
             if platform.system() == "Windows":
                 translator_script = os.path.join(ss14_ru_dir, "translation.bat")
                 if not os.path.exists(translator_script):
-                    await update.message.reply_text("Error: translation.bat not found in ss14_ru.")
+                    await update.message.reply_text("Ошибка: файл translation.bat не найден в ss14_ru.")
                     self.cleanup()
                     return
                 subprocess.run([translator_script], cwd=ss14_ru_dir, shell=True, check=True)
             else:
                 translator_script = os.path.join(ss14_ru_dir, "translation.sh")
                 if not os.path.exists(translator_script):
-                    await update.message.reply_text("Error: translation.sh not found in ss14_ru.")
+                    await update.message.reply_text("Ошибка: файл translation.sh не найден в ss14_ru.")
                     self.cleanup()
                     return
                 subprocess.run(["chmod", "+x", translator_script], check=True)
@@ -101,29 +103,29 @@ class TranslationBot:
             ftl_files = self.get_all_ftl_files()
 
             if not ftl_files:
-                await update.message.reply_text("No .ftl files found in Resources/Locale/ru-RU.")
+                await update.message.reply_text("Файлы .ftl не найдены в Resources/Locale/ru-RU.")
                 return
 
             keyboard = [
                 [
-                    InlineKeyboardButton("Yes", callback_data="confirm_translate"),
-                    InlineKeyboardButton("No", callback_data="cancel"),
+                    InlineKeyboardButton("Да", callback_data="confirm_translate"),
+                    InlineKeyboardButton("Нет", callback_data="cancel"),
                 ]
             ]
             reply_markup = InlineKeyboardMarkup(keyboard)
 
             await update.message.reply_text(
-                f"Found {len(ftl_files)} .ftl files. Translate all strings from English to Russian?",
+                f"Найдено файлов .ftl: {len(ftl_files)}. Перевести все строки с английского на русский?",
                 reply_markup=reply_markup,
             )
 
         except Exception as e:
-            logger.error(f"Error handling repository: {str(e)}")
-            await update.message.reply_text(f"Error: {str(e)}")
+            logger.error(f"Ошибка при обработке репозитория: {str(e)}")
+            await update.message.reply_text(f"Ошибка: {str(e)}")
             self.cleanup()
 
     def get_all_ftl_files(self) -> list:
-        target_dir = os.path.join(self.repo_dir, "Resources", "Locale", "ru-RU", "datasets")
+        target_dir = os.path.join(self.repo_dir, "Resources", "Locale", "ru-RU")
         ftl_files = []
         for root, _, files in os.walk(target_dir):
             for file in files:
@@ -136,11 +138,11 @@ class TranslationBot:
         await query.answer()
 
         if query.data == "cancel":
-            await query.edit_message_text("Operation cancelled.")
+            await query.edit_message_text("Операция отменена.")
             self.cleanup()
             return
 
-        await query.edit_message_text("Starting translation...")
+        await query.edit_message_text("Начинаю перевод...")
 
         try:
             ftl_files = self.get_all_ftl_files()
@@ -154,24 +156,24 @@ class TranslationBot:
             self.remove_ss14_ru()
 
             if total_translated > 0:
-                await query.edit_message_text(f"Successfully translated {total_translated} files. Creating fork...")
+                await query.edit_message_text(f"Успешно переведено файлов: {total_translated}. Создаю форк...")
                 fork_url = self.fork_and_push()
                 if fork_url:
                     await query.edit_message_text(
-                        f"Translation complete! Here's your fork: {fork_url}\n"
-                        "The original repository was not modified."
+                        f"Перевод завершён! Вот ваш форк: {fork_url}\n"
+                        "Оригинальный репозиторий не был изменён."
                     )
                 else:
                     await query.edit_message_text(
-                        "Translation complete but failed to create fork. "
-                        "You'll need to manually create a fork and push changes."
+                        "Перевод завершён, но не удалось создать форк. "
+                        "Придётся создать форк вручную и залить изменения самостоятельно."
                     )
             else:
-                await query.edit_message_text("No translations were made.")
+                await query.edit_message_text("Никакие строки не были переведены.")
 
         except Exception as e:
-            logger.error(f"Error during translation: {str(e)}")
-            await query.edit_message_text(f"Error during translation: {str(e)}")
+            logger.error(f"Ошибка во время перевода: {str(e)}")
+            await query.edit_message_text(f"Ошибка во время перевода: {str(e)}")
 
         finally:
             self.cleanup()
@@ -212,7 +214,7 @@ class TranslationBot:
             return True
 
         except Exception as e:
-            logger.error(f"Error translating file {file_path}: {str(e)}")
+            logger.error(f"Ошибка при переводе файла {file_path}: {str(e)}")
             return False
 
     def translate_text(self, text: str) -> str:
@@ -220,20 +222,38 @@ class TranslationBot:
             translated = GoogleTranslator(source='auto', target='ru').translate(text)
             return translated
         except Exception as e:
-            logger.error(f"Error translating text '{text}': {str(e)}")
+            logger.error(f"Ошибка при переводе текста '{text}': {str(e)}")
             return text
 
     def fork_and_push(self) -> str:
         try:
+            repo_owner = self.repo.remotes.origin.url.split("/")[-2]
+            repo_fullname = self.repo.remotes.origin.url.split(":")[-1].replace(".git", "")
+            repo_lastname = self.repo.remotes.origin.url.split("/")[-1].replace(".git", "")
+            url = f"https://api.github.com/repos/{repo_owner}/{repo_lastname}/forks"
+            headers = {
+                "Authorization": f"token {GITHUB_TOKEN}",
+                "Accept": "application/vnd.github+json",
+            }
+            r = requests.post(url, headers=headers)
+            if r.status_code not in (202, 200):
+                print(r.json())
+                raise Exception(f"Не удалось создать форк: {r.status_code} {r.text}")
+
+            fork_url = f"https://github.com/{GITHUB_USERNAME}/" + repo_fullname.split("/")[-1] + ".git"
+            push_url = f"https://{GITHUB_USERNAME}:{GITHUB_TOKEN}@github.com/{GITHUB_USERNAME}/" + repo_fullname.split("/")[-1] + ".git"
+
             new_branch = "translation-bot-russian"
             self.repo.git.checkout('-b', new_branch)
             self.repo.git.add(A=True)
-            self.repo.index.commit("Russian translation by Translation Bot")
-            origin = self.repo.remote(name='origin')
-            origin.push(new_branch)
-            return f"{self.repo_url}/tree/{new_branch}"
+            self.repo.index.commit("Перевод на русский язык с помощью Translation Bot")
+            self.repo.git.remote("set-url", "origin", push_url)
+            self.repo.git.push("origin", new_branch, force=True)
+
+            return f"{fork_url.replace('.git', '')}/tree/{new_branch}"
+
         except Exception as e:
-            logger.error(f"Error forking/pushing: {str(e)}")
+            logger.error(f"Ошибка при создании форка или пуше: {str(e)}")
             return None
 
     def cleanup(self):
@@ -251,8 +271,8 @@ class TranslationBot:
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text(
-        "Send me a link to a public GitHub repository with .ftl files. "
-        "I'll translate the English text to Russian and create a fork with the changes."
+        "Пришли ссылку на публичный репозиторий GitHub с .ftl-файлами. "
+        "Я переведу английский текст на русский и создам форк с изменениями."
     )
 
 def main() -> None:
